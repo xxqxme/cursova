@@ -9,10 +9,10 @@ struct Artwork: Codable, Identifiable, Equatable, Hashable {
     let objectDate: String?
     let primaryImageSmall: String?
     let primaryImage: String?
-
     let medium: String?
     let department: String?
 
+    // Для зручності декодування, якщо якихось полів немає в API
     enum CodingKeys: String, CodingKey {
         case objectID
         case title

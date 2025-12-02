@@ -2,78 +2,108 @@ import SwiftUI
 
 struct DetailView: View {
     let artwork: Artwork
+    @ObservedObject var vm: ArtViewModel
+    
+    // Стан для сповіщення про збереження фото
+    @State private var showingSaveAlert = false
+    @State private var saveMessage = ""
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {
+                
+                // Картинка
                 if let urlString = artwork.primaryImage, let url = URL(string: urlString), !urlString.isEmpty {
                     AsyncImage(url: url) { phase in
                         switch phase {
-                        case .empty:
-                            ProgressView().frame(maxWidth: .infinity, minHeight: 300)
                         case .success(let image):
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: .infinity)
-                        case .failure:
-                            // Fallback to small image if large fails
-                            if let thumb = artwork.primaryImageSmall, let turl = URL(string: thumb) {
-                                AsyncImage(url: turl) { p in
-                                    if let img = try? p.image {
-                                        img
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                    } else {
-                                        Color.gray.frame(height: 200)
-                                    }
-                                }
-                            } else {
-                                Color.gray.frame(height: 200)
-                            }
-                        @unknown default:
-                            Color.gray.frame(height: 200)
-                        }
-                    }
-                } else if let thumb = artwork.primaryImageSmall, let url = URL(string: thumb) {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
                             image.resizable().aspectRatio(contentMode: .fit)
-                        } else if phase.error != nil {
-                            Color.gray.frame(height: 200)
-                        } else {
-                            ProgressView().frame(height: 200)
+                        case .failure:
+                            Color.gray.frame(height: 300)
+                        case .empty:
+                            ProgressView().frame(height: 300).frame(maxWidth: .infinity)
+                        @unknown default:
+                            EmptyView()
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 } else {
-                    Color.gray.frame(height: 200)
+                    Color.gray.frame(height: 300).overlay(Text("Зображення відсутнє"))
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(artwork.title ?? "Без назви")
-                        .font(.title2)
-                        .bold()
-                    Text("Автор: \(artwork.artistDisplayName ?? "Невідомий")")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    if let date = artwork.objectDate, !date.isEmpty {
-                        Text("Дата: \(date)")
-                            .font(.subheadline)
+                // Кнопки дій (Улюблене + Зберегти фото)
+                HStack {
+                    // Кнопка "Улюблене"
+                    Button(action: {
+                        vm.toggleFavorite(artwork)
+                    }) {
+                        HStack {
+                            Image(systemName: vm.isFavorite(artwork) ? "star.fill" : "star")
+                            Text(vm.isFavorite(artwork) ? "У колекції" : "Додати в колекцію")
+                        }
                     }
-                    if let medium = artwork.medium, !medium.isEmpty {
-                        Text("Матеріал: \(medium)")
-                            .font(.subheadline)
-                    }
-                    if let dept = artwork.department, !dept.isEmpty {
-                        Text("Відділ: \(dept)")
-                            .font(.subheadline)
+                    .buttonStyle(.borderedProminent)
+                    .tint(vm.isFavorite(artwork) ? .orange : .blue)
+
+                    Spacer()
+
+                    // Кнопка "Зберегти фото"
+                    if artwork.primaryImage != nil {
+                        Button(action: {
+                            saveImageToGallery()
+                        }) {
+                            Image(systemName: "square.and.arrow.down")
+                                .font(.title2)
+                        }
                     }
                 }
                 .padding(.horizontal)
-                Spacer()
+
+                // Текстова інформація
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(artwork.title ?? "Без назви")
+                        .font(.title)
+                        .bold()
+
+                    Group {
+                        Text("Автор: ").bold() + Text(artwork.artistDisplayName ?? "Невідомий")
+                        if let date = artwork.objectDate {
+                            Text("Дата: ").bold() + Text(date)
+                        }
+                        if let medium = artwork.medium {
+                            Text("Матеріал: ").bold() + Text(medium)
+                        }
+                    }
+                    .font(.body)
+                }
+                .padding(.horizontal)
             }
         }
-        .navigationTitle(artwork.title ?? "Деталі")
+        .navigationTitle("Деталі")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(saveMessage, isPresented: $showingSaveAlert) {
+            Button("OK", role: .cancel) { }
+        }
+    }
+    
+    // Функція збереження в галерею
+    func saveImageToGallery() {
+        guard let urlString = artwork.primaryImage, let url = URL(string: urlString) else { return }
+        
+        // Завантажуємо фото у фоні і зберігаємо
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let uiImage = UIImage(data: data) {
+                    // Збереження в фотоальбом
+                    UIImageWriteToSavedPhotosAlbum(uiImage, nil, nil, nil)
+                    saveMessage = "Фото збережено в галерею!"
+                    showingSaveAlert = true
+                }
+            } catch {
+                saveMessage = "Помилка збереження."
+                showingSaveAlert = true
+            }
+        }
     }
 }
