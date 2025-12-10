@@ -12,7 +12,6 @@ struct Artwork: Codable, Identifiable, Equatable, Hashable {
     let medium: String?
     let department: String?
 
-    // Для зручності декодування, якщо якихось полів немає в API
     enum CodingKeys: String, CodingKey {
         case objectID
         case title

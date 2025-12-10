@@ -20,20 +20,24 @@ class ArtViewModel: ObservableObject {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         
+        print("Починаю пошук за словом: \(q)")
         isLoading = true
         errorMessage = nil
-        artworks = []
+        
+        
         
         do {
             let results = try await ArtService.shared.searchArtworks(query: q)
             
             if results.isEmpty {
                 errorMessage = "Нічого не знайдено"
+                artworks = []
             } else {
                 artworks = results
             }
         } catch {
-            errorMessage = "Помилка завантаження. Перевірте інтернет."
+            errorMessage = "Помилка мережі"
+            print("Помилка: \(error)")
         }
         
         isLoading = false

@@ -3,77 +3,114 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var vm = ArtViewModel()
     
+    @State private var searchPath = NavigationPath()
+    @State private var selectedTab = 0
+    
+    let backgroundGradient = LinearGradient(
+        colors: [Color.indigo.opacity(0.2), Color.purple.opacity(0.1), Color.white],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
     var body: some View {
-        TabView {
-            // Вкладка 1: Пошук
-            SearchView(vm: vm)
+        let tabBinding = Binding<Int>(
+            get: { selectedTab },
+            set: { tappedTab in
+                if tappedTab == selectedTab && tappedTab == 0 {
+                    searchPath = NavigationPath()
+                }
+                selectedTab = tappedTab
+            }
+        )
+        
+        TabView(selection: tabBinding) {
+            SearchView(vm: vm, background: backgroundGradient, path: $searchPath)
                 .tabItem {
                     Label("Пошук", systemImage: "magnifyingglass")
                 }
+                .tag(0)
             
-            // Вкладка 2: Улюблене
-            FavoritesView(vm: vm)
+            FavoritesView(vm: vm, background: backgroundGradient)
                 .tabItem {
-                    Label("Колекція", systemImage: "heart.fill")
+                    Label("Колекція", systemImage: "star.square.on.square.fill")
                 }
+                .tag(1)
         }
         .accentColor(.indigo)
     }
 }
 
-// Екран пошуку
 struct SearchView: View {
     @ObservedObject var vm: ArtViewModel
+    var background: LinearGradient
+    
+    @Binding var path: NavigationPath
     @FocusState private var isFocused: Bool
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // Поле пошуку
-                HStack {
-                    TextField("Пошук...", text: $vm.query) // Текст змінив тут
-                        .padding(10)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                        .focused($isFocused)
-                        .submitLabel(.search)
-                        .onSubmit { Task { await vm.search() } }
-                    
-                    Button {
-                        Task { await vm.search() }
-                        isFocused = false
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.white)
-                            .padding(10)
-                            .background(Color.indigo)
-                            .cornerRadius(10)
-                    }
-                }
-                .padding()
-                .background(Color.white)
-                .shadow(color: .black.opacity(0.05), radius: 5, y: 5)
+        NavigationStack(path: $path) {
+            ZStack {
+                background.ignoresSafeArea()
                 
-                // Список результатів
-                ZStack {
-                    Color(.systemGroupedBackground).ignoresSafeArea()
+                VStack(spacing: 0) {
+                    HStack {
+                        TextField("Пошук", text: $vm.query)
+                            .padding(12)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                            .focused($isFocused)
+                            .submitLabel(.search)
+                            .onSubmit {
+                                Task { await vm.search() }
+                            }
+                            .overlay(
+                                HStack {
+                                    Spacer()
+                                    if !vm.query.isEmpty {
+                                        Button(action: { vm.query = "" }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(.gray)
+                                        }
+                                        .padding(.trailing, 8)
+                                    }
+                                }
+                            )
+                        
+                        Button {
+                            Task { await vm.search() }
+                            isFocused = false
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(Color.indigo)
+                                .cornerRadius(12)
+                                .shadow(radius: 3)
+                        }
+                    }
+                    .padding()
                     
                     if vm.isLoading {
-                        ProgressView("Завантаження...") // Текст змінив тут
+                        Spacer()
+                        ProgressView("Завантаження")
+                            .tint(.indigo)
                             .scaleEffect(1.2)
+                        Spacer()
                     } else if let err = vm.errorMessage {
+                        Spacer()
                         VStack {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.largeTitle)
                                 .foregroundColor(.orange)
-                            Text(err).padding()
+                            Text(err).padding().foregroundColor(.secondary)
                         }
+                        Spacer()
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 16) {
                                 ForEach(vm.artworks) { art in
                                     NavigationLink(value: art) {
-                                        ArtworkCard(art: art)
+                                        GlassArtworkCard(art: art)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -92,30 +129,30 @@ struct SearchView: View {
     }
 }
 
-// Екран улюблених
 struct FavoritesView: View {
     @ObservedObject var vm: ArtViewModel
+    var background: LinearGradient
     
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+                background.ignoresSafeArea()
                 
                 if vm.favorites.isEmpty {
                     VStack(spacing: 15) {
-                        Image(systemName: "heart.slash")
-                            .font(.system(size: 50))
-                            .foregroundColor(.gray)
-                        Text("Колекція порожня")
+                        Image(systemName: "square.stack.3d.up.slash")
+                            .font(.system(size: 60))
+                            .foregroundColor(.indigo.opacity(0.3))
+                        Text("Ваша галерея порожня")
                             .font(.headline)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {
                             ForEach(vm.favorites) { art in
                                 NavigationLink(value: art) {
-                                    ArtworkCard(art: art)
+                                    GlassArtworkCard(art: art)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -132,52 +169,51 @@ struct FavoritesView: View {
     }
 }
 
-// Картка твору (Дизайн)
-struct ArtworkCard: View {
+struct GlassArtworkCard: View {
     let art: Artwork
     
     var body: some View {
         HStack(spacing: 15) {
-            // Картинка
             if let thumb = art.primaryImageSmall, let url = URL(string: thumb) {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {
                         image.resizable().aspectRatio(contentMode: .fill)
                     } else {
-                        Color(.systemGray5)
+                        Color.indigo.opacity(0.1)
                     }
                 }
-                .frame(width: 80, height: 80)
-                .cornerRadius(12)
+                .frame(width: 70, height: 70)
+                .cornerRadius(10)
                 .clipped()
             } else {
                 ZStack {
-                    Color(.systemGray6)
-                    Image(systemName: "photo").foregroundColor(.gray)
+                    Color.indigo.opacity(0.05)
+                    Image(systemName: "photo")
+                        .foregroundColor(.indigo.opacity(0.3))
                 }
-                .frame(width: 80, height: 80)
-                .cornerRadius(12)
+                .frame(width: 70, height: 70)
+                .cornerRadius(10)
             }
             
-            // Текст
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(art.title ?? "Без назви")
-                    .font(.headline)
+                    .font(.system(.headline, design: .serif))
                     .lineLimit(2)
                     .foregroundColor(.primary)
                 
                 Text(art.artistDisplayName ?? "Невідомий автор")
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
             Spacer()
             
             Image(systemName: "chevron.right")
-                .foregroundColor(.gray.opacity(0.5))
+                .foregroundColor(.secondary.opacity(0.5))
+                .font(.caption)
         }
         .padding(12)
-        .background(Color.white)
+        .background(.ultraThinMaterial)
         .cornerRadius(16)
-        .shadow(color: .black.opacity(0.08), radius: 5, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 }

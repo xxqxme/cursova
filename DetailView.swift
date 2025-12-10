@@ -4,18 +4,15 @@ struct DetailView: View {
     let artwork: Artwork
     @ObservedObject var vm: ArtViewModel
     
-    // Для алерту збереження
     @State private var showingSaveAlert = false
     @State private var saveMessage = ""
     
-    // Анімація сердечка
     @State private var isAnimatingHeart = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 
-                // 1. Зображення
                 if let urlString = artwork.primaryImage, let url = URL(string: urlString), !urlString.isEmpty {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -25,7 +22,7 @@ struct DetailView: View {
                                 .aspectRatio(contentMode: .fit)
                                 .cornerRadius(12)
                                 .shadow(radius: 8)
-                                .transition(.opacity.animation(.easeInOut(duration: 0.5))) // Анімація появи
+                                .transition(.opacity.animation(.easeInOut(duration: 0.5)))
                         case .empty:
                             ProgressView().frame(height: 300)
                         case .failure:
@@ -37,7 +34,6 @@ struct DetailView: View {
                     .padding(.horizontal)
                 }
 
-                // 2. Інфо-панель
                 VStack(alignment: .leading, spacing: 15) {
                     
                     HStack(alignment: .top) {
@@ -46,13 +42,11 @@ struct DetailView: View {
                             .bold()
                         Spacer()
                         
-                        // Кнопка Лайк з анімацією
                         Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                                 vm.toggleFavorite(artwork)
                                 isAnimatingHeart = true
                             }
-                            // Скидаємо анімацію
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 isAnimatingHeart = false
                             }
@@ -60,13 +54,12 @@ struct DetailView: View {
                             Image(systemName: vm.isFavorite(artwork) ? "heart.fill" : "heart")
                                 .font(.title)
                                 .foregroundColor(vm.isFavorite(artwork) ? .red : .gray)
-                                .scaleEffect(isAnimatingHeart ? 1.4 : 1.0) // Збільшення при натисканні
+                                .scaleEffect(isAnimatingHeart ? 1.4 : 1.0)
                         }
                     }
                     
                     Divider()
                     
-                    // Деталі
                     VStack(alignment: .leading, spacing: 8) {
                         detailRow(icon: "paintbrush.fill", text: artwork.artistDisplayName ?? "Невідомий")
                         if let date = artwork.objectDate {
@@ -79,7 +72,6 @@ struct DetailView: View {
                     
                     Divider()
                     
-                    // Кнопка збереження фото
                     if artwork.primaryImage != nil {
                         Button(action: { saveImageToGallery() }) {
                             HStack {
@@ -109,7 +101,6 @@ struct DetailView: View {
         }
     }
     
-    // Допоміжний рядок
     func detailRow(icon: String, text: String) -> some View {
         HStack {
             Image(systemName: icon)
@@ -120,7 +111,6 @@ struct DetailView: View {
         }
     }
     
-    // Логіка збереження
     func saveImageToGallery() {
         guard let urlString = artwork.primaryImage, let url = URL(string: urlString) else { return }
         Task {
