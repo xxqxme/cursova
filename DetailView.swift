@@ -1,18 +1,21 @@
 import SwiftUI
+import Photos
 
 struct DetailView: View {
     let artwork: Artwork
     @ObservedObject var vm: ArtViewModel
     
-    @State private var showingSaveAlert = false
-    @State private var saveMessage = ""
+    @State private var showingAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    @State private var isSettingsAction = false
     
     @State private var isAnimatingHeart = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                
+                // Блок відображення картинки
                 if let urlString = artwork.primaryImage, let url = URL(string: urlString), !urlString.isEmpty {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -22,7 +25,6 @@ struct DetailView: View {
                                 .aspectRatio(contentMode: .fit)
                                 .cornerRadius(12)
                                 .shadow(radius: 8)
-                                .transition(.opacity.animation(.easeInOut(duration: 0.5)))
                         case .empty:
                             ProgressView().frame(height: 300)
                         case .failure:
@@ -35,7 +37,6 @@ struct DetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 15) {
-                    
                     HStack(alignment: .top) {
                         Text(artwork.title ?? "Без назви")
                             .font(.title2)
@@ -73,7 +74,7 @@ struct DetailView: View {
                     Divider()
                     
                     if artwork.primaryImage != nil {
-                        Button(action: { saveImageToGallery() }) {
+                        Button(action: { checkPermissionAndSave() }) {
                             HStack {
                                 Image(systemName: "square.and.arrow.down")
                                 Text("Зберегти в галерею")
@@ -96,8 +97,19 @@ struct DetailView: View {
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
-        .alert(saveMessage, isPresented: $showingSaveAlert) {
-            Button("OK", role: .cancel) { }
+        .alert(alertTitle, isPresented: $showingAlert) {
+            if isSettingsAction {
+                Button("Налаштування") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Скасувати", role: .cancel) { }
+            } else {
+                Button("OK", role: .cancel) { }
+            }
+        } message: {
+            Text(alertMessage)
         }
     }
     
@@ -110,6 +122,28 @@ struct DetailView: View {
                 .foregroundColor(.secondary)
         }
     }
+
+    func checkPermissionAndSave() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        
+        switch status {
+        case .authorized, .limited:
+            saveImageToGallery()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
+                if newStatus == .authorized || newStatus == .limited {
+                    saveImageToGallery()
+                }
+            }
+        case .denied, .restricted:
+            alertTitle = "Доступ обмежено"
+            alertMessage = "Ви заборонили доступ до фото. Щоб зберегти картину, змініть це у налаштуваннях."
+            isSettingsAction = true
+            showingAlert = true
+        @unknown default:
+            break
+        }
+    }
     
     func saveImageToGallery() {
         guard let urlString = artwork.primaryImage, let url = URL(string: urlString) else { return }
@@ -117,13 +151,19 @@ struct DetailView: View {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let uiImage = UIImage(data: data) {
-                    UIImageWriteToSavedPhotosAlbum(uiImage, nil, nil, nil)
-                    saveMessage = "Успішно збережено!"
-                    showingSaveAlert = true
+                    try await PHPhotoLibrary.shared().performChanges {
+                        PHAssetChangeRequest.creationRequestForAsset(from: uiImage)
+                    }
+                    alertTitle = "Успішно"
+                    alertMessage = "Картину збережено у ваші фото."
+                    isSettingsAction = false
+                    showingAlert = true
                 }
             } catch {
-                saveMessage = "Помилка збереження"
-                showingSaveAlert = true
+                alertTitle = "Помилка"
+                alertMessage = "Не вдалося зберегти зображення."
+                isSettingsAction = false
+                showingAlert = true
             }
         }
     }
